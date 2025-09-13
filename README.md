@@ -143,9 +143,43 @@ Please follow these steps:
       --output_dir=/home/user/absolute_path_to_the_output_dir
     ```
 
-1.  Once the run is over, the output directory shall contain predicted
-    structures of the target protein. Please check the documentation below for
-    additional options and troubleshooting tips.
+1.  Once the run is over, a subdirectory of the output directory shall contain
+    predicted structures of the target protein. Please check the documentation
+    below for additional options and troubleshooting tips.
+
+### Running AlphaFold on AMD GPUs
+
+It is also possible to run AlphaFold on AMD GPUs using the ROCm stack. This
+requires a different setup from the standard NVIDIA-based installation.
+
+You will need a machine with a ROCm-compatible AMD GPU and the necessary drivers
+and ROCm stack installed. Please refer to the
+[official AMD ROCm documentation](https://rocm.docs.amd.com/) for installation
+instructions for your system.
+
+Once your host machine is set up, follow these steps:
+
+1.  **Build the ROCm Docker image:**
+    We provide a specific Dockerfile for ROCm environments. Build it using the
+    following command:
+    ```bash
+    docker build -f docker/Dockerfile.rocm -t alphafold-rocm .
+    ```
+
+2.  **Run `run_docker.py` with ROCm flags:**
+    When running your prediction, you need to use the `--use_rocm` flag to
+    enable AMD GPU support and point to the ROCm Docker image you just built
+    using the `--docker_image_name` flag.
+    ```bash
+    python3 docker/run_docker.py \
+      --fasta_paths=your_protein.fasta \
+      --max_template_date=2022-01-01 \
+      --data_dir=$DOWNLOAD_DIR \
+      --output_dir=/home/user/absolute_path_to_the_output_dir \
+      --docker_image_name=alphafold-rocm \
+      --use_rocm
+    ```
+    This will launch AlphaFold in a container with access to your AMD GPU.
 
 ### Genetic databases
 
