@@ -1,0 +1,48 @@
+# ROCm-based Dockerfile for AlphaFold.
+#
+# This Dockerfile is based on the original AlphaFold Dockerfile, but is
+# modified to use a ROCm base image and to install a ROCm-enabled version of JAX.
+# This allows AlphaFold to be run on AMD GPUs.
+
+# Use a ROCm development image as the base.
+# Using a specific version for reproducibility.
+FROM rocm/dev-ubuntu-22.04:5.6.0
+
+# Install dependencies.
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git \
+    wget \
+    aria2 \
+    # Dependencies for AlphaFold.
+    hmmer \
+    kalign \
+    # HH-suite is not available in the default Ubuntu repositories.
+    # We will install it from source.
+    && rm -rf /var/lib/apt/lists/*
+
+# Install HH-suite from source.
+RUN wget https://github.com/soedinglab/hh-suite/releases/download/v3.3.0/hh-suite-3.3.0-SSE2-Linux.tar.gz \
+    && tar xvfz hh-suite-3.3.0-SSE2-Linux.tar.gz \
+    && cp -r hh-suite-3.3.0-SSE2-Linux/bin/* /usr/bin/ \
+    && cp -r hh-suite-3.3.0-SSE2-Linux/scripts/* /usr/bin/
+
+# Set up a non-root user.
+RUN useradd --system --create-home --shell /bin/bash --gid nogroup --uid 1000 alphafold
+USER alphafold
+
+# Set up the working directory.
+WORKDIR /app/alphafold
+COPY . /app/alphafold
+
+# Install Python dependencies.
+# We need to install a ROCm-enabled version of JAX.
+# The other dependencies are from requirements.txt.
+COPY requirements.txt .
+RUN python3 -m pip install --upgrade pip \
+    && python3 -m pip install --no-cache-dir -r requirements.txt \
+    # Install ROCm-enabled JAX.
+    && python3 -m pip install --upgrade "jax[rocm]" -f https://storage.googleapis.com/jax-releases/jax_rocm_releases.html
+
+# Set entrypoint.
+ENTRYPOINT ["python3", "run_alphafold.py"]

@@ -28,6 +28,8 @@ from docker import types
 
 flags.DEFINE_bool(
     'use_gpu', True, 'Enable NVIDIA runtime to run with GPUs.')
+flags.DEFINE_bool(
+    'use_rocm', False, 'Enable AMD ROCm runtime to run with GPUs.')
 flags.DEFINE_enum('models_to_relax', 'best', ['best', 'all', 'none'],
                   'The models to run the final relaxation step on. '
                   'If `all`, all models are relaxed, which may be time '
@@ -214,7 +216,7 @@ def main(argv):
   output_target_path = os.path.join(_ROOT_MOUNT_DIRECTORY, 'output')
   mounts.append(types.Mount(output_target_path, FLAGS.output_dir, type='bind'))
 
-  use_gpu_relax = FLAGS.enable_gpu_relax and FLAGS.use_gpu
+  use_gpu_relax = FLAGS.enable_gpu_relax and (FLAGS.use_gpu or FLAGS.use_rocm)
 
   command_args.extend([
       f'--output_dir={output_target_path}',
@@ -230,25 +232,37 @@ def main(argv):
   ])
 
   client = docker.from_env()
-  device_requests = [
-      docker.types.DeviceRequest(driver='nvidia', capabilities=[['gpu']])
-  ] if FLAGS.use_gpu else None
+  run_kwargs = {
+      'image': FLAGS.docker_image_name,
+      'command': command_args,
+      'remove': True,
+      'detach': True,
+      'mounts': mounts,
+      'user': FLAGS.docker_user,
+  }
 
-  container = client.containers.run(
-      image=FLAGS.docker_image_name,
-      command=command_args,
-      device_requests=device_requests,
-      remove=True,
-      detach=True,
-      mounts=mounts,
-      user=FLAGS.docker_user,
-      environment={
-          'NVIDIA_VISIBLE_DEVICES': FLAGS.gpu_devices,
-          # The following flags allow us to make predictions on proteins that
-          # would typically be too long to fit into GPU memory.
-          'TF_FORCE_UNIFIED_MEMORY': '1',
-          'XLA_PYTHON_CLIENT_MEM_FRACTION': '4.0',
-      })
+  if FLAGS.use_gpu and FLAGS.use_rocm:
+    raise ValueError('Cannot use both --use_gpu and --use_rocm flags.')
+
+  if FLAGS.use_rocm:
+    run_kwargs['devices'] = ['/dev/kfd:/dev/kfd', '/dev/dri:/dev/dri']
+    run_kwargs['security_opt'] = ['seccomp=unconfined']
+    run_kwargs['group_add'] = ['video', 'render']
+    run_kwargs['environment'] = {
+        'TF_FORCE_UNIFIED_MEMORY': '1',
+        'XLA_PYTHON_CLIENT_MEM_FRACTION': '4.0',
+    }
+  elif FLAGS.use_gpu:
+    run_kwargs['device_requests'] = [
+        docker.types.DeviceRequest(driver='nvidia', capabilities=[['gpu']])
+    ]
+    run_kwargs['environment'] = {
+        'NVIDIA_VISIBLE_DEVICES': FLAGS.gpu_devices,
+        'TF_FORCE_UNIFIED_MEMORY': '1',
+        'XLA_PYTHON_CLIENT_MEM_FRACTION': '4.0',
+    }
+
+  container = client.containers.run(**run_kwargs)
 
   # Add signal handler to ensure CTRL+C also stops the running container.
   signal.signal(signal.SIGINT,
