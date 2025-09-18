@@ -6,7 +6,7 @@
 
 # Use a ROCm development image as the base.
 # Using a specific version for reproducibility.
-FROM rocm/dev-ubuntu-22.04:6.3.4-complete
+FROM rocm/dev-ubuntu-22.04:5.6.0
 
 # Install dependencies.
 RUN apt-get update && apt-get install -y \
@@ -22,10 +22,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install HH-suite from source.
-RUN wget https://github.com/soedinglab/hh-suite/releases/download/v3.3.0/hh-suite-3.3.0-SSE2-Linux.tar.gz \
-    && tar xvfz hh-suite-3.3.0-SSE2-Linux.tar.gz \
-    && cp -r hh-suite-3.3.0-SSE2-Linux/bin/* /usr/bin/ \
-    && cp -r hh-suite-3.3.0-SSE2-Linux/scripts/* /usr/bin/
+# The official hh-suite github release assets have unstable filenames.
+# Using the stable link from mmseqs.com instead.
+# This tarball extracts to ./bin and ./scripts directories.
+RUN wget https://dev.mmseqs.com/hhsuite/hhsuite-linux-avx2.tar.gz \
+    && tar xvfz hhsuite-linux-avx2.tar.gz \
+    && cp -r bin/* /usr/bin/ \
+    && cp -r scripts/* /usr/bin/
 
 # Set up a non-root user.
 RUN useradd --system --create-home --shell /bin/bash --gid nogroup --uid 1000 alphafold
