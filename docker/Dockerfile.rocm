@@ -5,8 +5,10 @@
 # This allows AlphaFold to be run on AMD GPUs.
 
 # Use a ROCm development image as the base.
-# Using a specific version for reproducibility.
-FROM rocm/dev-ubuntu-22.04:5.6.0
+# The original target was ROCm 5.6.0 for compatibility with JAX 0.4.26.
+# However, the older images are no longer available on Docker Hub.
+# We are using a newer version and assuming backward compatibility.
+FROM rocm/dev-ubuntu-22.04:6.3.4
 
 # Install dependencies.
 RUN apt-get update && apt-get install -y \
